@@ -1,0 +1,55 @@
+---
+- name: Configurar servidor Debian para aplicação crítica
+  hosts: all
+  become: yes
+
+  vars:
+    timezone: "Etc/UTC"
+    allowed_ports: [22]
+
+  tasks:
+    - name: Garantir que o cache de pacotes está atualizado
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Instalar ferramentas administrativas essenciais
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - curl
+        - vim
+        - htop
+
+    - name: Configurar o fuso horário
+      command: timedatectl set-timezone "{{ timezone }}"
+
+    - name: Habilitar roteamento IP no kernel
+      lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^net.ipv4.ip_forward'
+        line: 'net.ipv4.ip_forward=1'
+        state: present
+
+    - name: Recarregar configurações do kernel
+      command: sysctl -p
+
+    - name: Instalar UFW (caso ainda não esteja presente)
+      apt:
+        name: ufw
+        state: present
+
+    - name: Configurar o firewall UFW - Permitir apenas tráfego SSH
+      ufw:
+        rule: allow
+        port: "{{ allowed_ports }}"
+        proto: tcp
+
+    - name: Configurar o firewall UFW - Habilitar firewall
+      command: ufw --force enable
+
+    - name: Reiniciar o serviço UFW
+      service:
+        name: ufw
+        state: restarted
